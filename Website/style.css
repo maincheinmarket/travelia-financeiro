@@ -641,6 +641,13 @@ html, body {
     background: var(--color-bg);
     border-radius: 30px;
     border: 1px solid var(--color-border);
+    box-shadow: inset 0 0 10px rgba(var(--color-primary-rgb), 0.05);
+    transition: var(--transition-smooth);
+}
+
+.voice-wave-mockup:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 15px rgba(var(--color-primary-rgb), 0.15);
 }
 
 .wave-bar {
@@ -895,18 +902,78 @@ html, body {
 }
 
 /* Map Label Styling */
-.maplibre-popup-content {
+.maplibregl-popup-content {
     background: var(--color-surface-solid) !important;
     color: var(--color-text-main) !important;
     border-radius: var(--border-radius-md) !important;
     border: 1px solid var(--color-border) !important;
-    padding: 10px 14px !important;
+    padding: 12px 16px !important;
     box-shadow: var(--shadow-main) !important;
+    font-size: 13px !important;
+    line-height: 1.4 !important;
 }
-.maplibre-popup-anchor-top .maplibre-popup-tip { border-bottom-color: var(--color-surface-solid) !important; }
-.maplibre-popup-anchor-bottom .maplibre-popup-tip { border-top-color: var(--color-surface-solid) !important; }
-.maplibre-popup-anchor-left .maplibre-popup-tip { border-right-color: var(--color-surface-solid) !important; }
-.maplibre-popup-anchor-right .maplibre-popup-tip { border-left-color: var(--color-surface-solid) !important; }
+
+.maplibregl-popup-content strong {
+    color: var(--color-primary) !important;
+    font-weight: 700 !important;
+}
+
+.maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--color-surface-solid) !important; }
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--color-surface-solid) !important; }
+.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--color-surface-solid) !important; }
+.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--color-surface-solid) !important; }
+
+/* Reference Marker styling */
+.map-reference-marker {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    opacity: 0.8;
+}
+
+.map-reference-marker:hover {
+    transform: scale(1.6);
+    background-color: var(--color-primary);
+    box-shadow: 0 0 10px var(--color-primary);
+    opacity: 1;
+}
+
+/* Floating Label Reference Popup */
+.map-ref-popup .maplibregl-popup-content {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+.map-ref-popup .maplibregl-popup-tip {
+    display: none !important;
+}
+
+.ref-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    background: var(--color-surface-solid);
+    border: 1px solid var(--color-border);
+    padding: 2px 6px;
+    border-radius: var(--border-radius-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: var(--shadow-main);
+    pointer-events: none;
+    white-space: nowrap;
+    animation: refLabelFloat 3s ease-in-out infinite alternate;
+}
+
+@keyframes refLabelFloat {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-3px); }
+}
 
 /* ==========================================================================
    RIGHT COLUMN: DATA CARDS
@@ -1452,8 +1519,8 @@ html, body {
 }
 
 @keyframes wavePulse {
-    0%, 100% { transform: scaleY(1); }
-    50% { transform: scaleY(0.4); }
+    0%, 100% { transform: scaleY(0.25); opacity: 0.6; }
+    50% { transform: scaleY(1.35); opacity: 1; filter: drop-shadow(0 0 3px var(--color-primary)); }
 }
 
 @keyframes buttonPulse {

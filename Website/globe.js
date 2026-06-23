@@ -7,6 +7,7 @@ let currentRotationId = null;
 let isRotating = false;
 const originCoords = [-48.5482, -27.5954]; // Florianópolis, BR
 let activeMarkers = [];
+let referenceMarkers = [];
 let animationFrameId = null;
 
 // Initialize MapLibre Globe
@@ -55,13 +56,11 @@ function initGlobe() {
             console.warn("Projeção Globe não disponível nesta versão do MapLibre");
         }
 
-        // Add sky background / atmosphere effect
-        if (map.addLayer) {
-            // Some MapLibre styles support custom atmosphere layers. In pure raster, we rely on the 3D globe visualization.
-        }
-
         // Add Florianópolis Origin Marker
         addOriginMarker();
+
+        // Add subtle reference markers for capitals
+        addReferenceMarkers();
     });
 
     // Handle zoom controls
@@ -88,12 +87,47 @@ function addOriginMarker() {
     activeMarkers.push(marker);
 }
 
+// Add subtle reference markers for capitals
+function addReferenceMarkers() {
+    const referenceDestinations = [
+        { coords: [2.5500, 49.0097], name: "Paris", iata: "CDG" },
+        { coords: [-9.1359, 38.7756], name: "Lisboa", iata: "LIS" },
+        { coords: [12.2389, 41.8003], name: "Roma", iata: "FCO" },
+        { coords: [139.7811, 35.5494], name: "Tóquio", iata: "HND" },
+        { coords: [-58.5358, -34.8222], name: "Buenos Aires", iata: "EZE" }
+    ];
+
+    referenceDestinations.forEach(dest => {
+        const el = document.createElement('div');
+        el.className = 'map-reference-marker';
+        
+        const popup = new maplibregl.Popup({ 
+            offset: 10, 
+            closeButton: false, 
+            closeOnClick: false, 
+            className: 'map-ref-popup' 
+        })
+        .setHTML(`<span class="ref-label">${dest.name} (${dest.iata})</span>`);
+
+        const marker = new maplibregl.Marker({ element: el })
+            .setLngLat(dest.coords)
+            .setPopup(popup)
+            .addTo(map);
+
+        marker.togglePopup();
+        referenceMarkers.push(marker);
+    });
+}
+
 // Animate Flight Route (FLN to Destination)
 function animateFlightRoute(destCoords, destName, iataCode) {
     // Clear previous flight paths and markers (except FLN)
     clearRoutes();
 
     if (!map) return;
+
+    // Hide reference markers during active route animation
+    referenceMarkers.forEach(marker => marker.remove());
 
     // 1. Calculate Great Circle path using Turf.js
     const originPoint = turf.point(originCoords);
@@ -264,6 +298,15 @@ function clearRoutes() {
         }
         activeMarkers = [activeMarkers[0]];
     }
+
+    // Re-add reference markers when route is cleared
+    referenceMarkers.forEach(marker => {
+        marker.addTo(map);
+        const popup = marker.getPopup();
+        if (popup && !popup.isOpen()) {
+            marker.togglePopup();
+        }
+    });
 }
 
 // Globe Auto Rotation Logic
