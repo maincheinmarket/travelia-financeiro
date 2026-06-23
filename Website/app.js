@@ -37,6 +37,30 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // 3. Mobile Navigation Bottom Tab Bar Event Listeners
+    document.querySelectorAll('.mobile-bottom-nav .mobile-nav-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.mobile-bottom-nav .mobile-nav-btn').forEach(b => b.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+
+            const targetPanel = e.currentTarget.getAttribute('data-mobile-panel');
+            
+            // Toggle panel active states
+            document.querySelector('.chat-panel').classList.remove('mobile-visible');
+            document.querySelector('.map-section').classList.remove('mobile-visible');
+            document.querySelector('.data-section').classList.remove('mobile-visible');
+
+            if (targetPanel === 'chat') {
+                document.querySelector('.chat-panel').classList.add('mobile-visible');
+            } else if (targetPanel === 'map') {
+                document.querySelector('.map-section').classList.add('mobile-visible');
+                setTimeout(() => { if (map) map.resize(); }, 150); // Redraw MapLibre canvas on resize
+            } else if (targetPanel === 'data') {
+                document.querySelector('.data-section').classList.add('mobile-visible');
+            }
+        });
+    });
+
     // Setup first system message in chat
     setTimeout(() => {
         const config = getSettings();
@@ -54,6 +78,19 @@ function enterDashboard() {
     document.getElementById('landing-page').className = 'section-hidden';
     document.getElementById('dashboard-page').className = 'section-active';
     
+    // Set default visible panel on mobile
+    document.querySelector('.chat-panel').classList.add('mobile-visible');
+    document.querySelector('.map-section').classList.remove('mobile-visible');
+    document.querySelector('.data-section').classList.remove('mobile-visible');
+    
+    // Reset active state for bottom nav buttons on entry
+    document.querySelectorAll('.mobile-bottom-nav .mobile-nav-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('data-mobile-panel') === 'chat') {
+            btn.classList.add('active');
+        }
+    });
+
     // Resize map once container is visible to ensure correct canvas sizing
     setTimeout(() => {
         if (map) map.resize();
@@ -245,7 +282,11 @@ function drawBudgetDonutChart(data) {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const colors = ['#FFA666', '#2ec4b6', '#ff9f1c', '#a09e9c'];
+    // Read colors dynamically from CSS tokens
+    const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#FFA666';
+    const textMutedColor = getComputedStyle(document.documentElement).getPropertyValue('--color-text-muted').trim() || '#a09e9c';
+
+    const colors = [primaryColor, '#2ec4b6', '#ff9f1c', textMutedColor];
     let total = data.reduce((sum, item) => sum + item.value, 0);
     
     let startAngle = -Math.PI / 2;
