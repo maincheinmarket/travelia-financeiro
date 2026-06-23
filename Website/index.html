@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travelia — Consultor de Viagens de Luxo & Finanças</title>
+    
+    <!-- Google Fonts - Urbanist -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    
+    <!-- MapLibre GL JS CSS -->
+    <link href="https://unpkg.com/maplibre-gl@5.0.0/dist/maplibre-gl.css" rel="stylesheet" />
+    
+    <!-- Icons (Lucide) via CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- 1. LANDING PAGE -->
+    <section id="landing-page" class="section-active">
+        <header class="landing-header">
+            <div class="logo">
+                <span class="logo-icon">m</span>
+                <span class="logo-text">travelia</span>
+            </div>
+            <div class="header-actions">
+                <button class="theme-toggle" id="landing-theme-toggle" aria-label="Alternar tema">
+                    <i data-lucide="moon"></i>
+                </button>
+            </div>
+        </header>
+
+        <div class="landing-hero">
+            <div class="hero-content">
+                <span class="badge-premium">CONCIERGE DE INTELIGÊNCIA ARTIFICIAL</span>
+                <h1>Seu consultor financeiro de viagens de luxo</h1>
+                <p>Análise de câmbio em tempo real, emissão inteligente de passagens ao menor preço e contexto econômico consolidado. Tudo integrado em um globo interativo 3D.</p>
+                <div class="hero-buttons">
+                    <button class="btn btn-primary" id="btn-start">
+                        Iniciar Consulta
+                        <i data-lucide="arrow-right"></i>
+                    </button>
+                    <button class="btn btn-secondary" id="btn-open-settings-landing">
+                        <i data-lucide="settings"></i>
+                        Configurar n8n
+                    </button>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <!-- Animação sutil de globo em CSS/Canvas -->
+                <div class="globe-preview">
+                    <div class="globe-grid"></div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="landing-footer">
+            <p>&copy; 2026 Travelia AI. Todos os direitos reservados. Projetado para integração com n8n Multi-Agent.</p>
+        </footer>
+    </section>
+
+    <!-- 2. DASHBOARD PAGE -->
+    <section id="dashboard-page" class="section-hidden">
+        <header class="dashboard-header">
+            <div class="logo" id="logo-to-landing">
+                <span class="logo-icon">m</span>
+                <span class="logo-text">travelia</span>
+            </div>
+            
+            <nav class="dashboard-nav">
+                <button class="nav-item active" data-tab="tours">
+                    <i data-lucide="compass"></i>
+                    <span>Tours</span>
+                </button>
+                <button class="nav-item" data-tab="transfer">
+                    <i data-lucide="car"></i>
+                    <span>Transfer</span>
+                </button>
+                <button class="nav-item" data-tab="hotels">
+                    <i data-lucide="hotel"></i>
+                    <span>Hotéis</span>
+                </button>
+                <button class="nav-item" data-tab="guides">
+                    <i data-lucide="users"></i>
+                    <span>Guias</span>
+                </button>
+            </nav>
+            
+            <div class="dashboard-header-actions">
+                <button class="icon-btn" id="btn-settings" title="Configurações">
+                    <i data-lucide="settings"></i>
+                </button>
+                <button class="icon-btn" id="dashboard-theme-toggle" title="Alternar tema">
+                    <i data-lucide="moon"></i>
+                </button>
+                <div class="user-profile">
+                    <i data-lucide="user"></i>
+                </div>
+            </div>
+        </header>
+
+        <main class="dashboard-content">
+            <!-- COLUNA ESQUERDA: CHAT PANEL -->
+            <aside class="chat-panel">
+                <div class="chat-header">
+                    <div class="chat-bot-info">
+                        <div class="bot-avatar">
+                            <i data-lucide="bot"></i>
+                        </div>
+                        <div>
+                            <h3>Concierge Travelia</h3>
+                            <span class="bot-status"><span class="status-dot"></span>Online</span>
+                        </div>
+                    </div>
+                    <div class="chat-header-actions">
+                        <button class="icon-btn" id="btn-clear-chat" title="Limpar conversa">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="chat-messages" id="chat-messages-container">
+                    <!-- Mensagens do Chat -->
+                    <div class="message system-msg">
+                        <p>Configure a URL do webhook do n8n nas configurações (⚙️) no canto superior direito para conversar com seu agente de viagens.</p>
+                    </div>
+                </div>
+
+                <div class="chat-chips-container" id="chat-chips">
+                    <button class="chip" data-text="Europa mês que vem">Europa</button>
+                    <button class="chip" data-text="Ásia semana que vem">Ásia</button>
+                    <button class="chip" data-text="América do Sul barato">América do Sul</button>
+                    <button class="chip" data-text="Quero planejar uma viagem para Paris">Paris</button>
+                </div>
+
+                <div class="chat-input-area">
+                    <div class="voice-wave-mockup" id="voice-wave" style="display: none;">
+                        <span class="wave-bar"></span>
+                        <span class="wave-bar"></span>
+                        <span class="wave-bar"></span>
+                        <button class="mic-btn active" id="btn-stop-voice" aria-label="Parar áudio">
+                            <i data-lucide="mic"></i>
+                        </button>
+                        <span class="wave-bar"></span>
+                        <span class="wave-bar"></span>
+                        <span class="wave-bar"></span>
+                    </div>
+                    
+                    <div class="input-wrapper">
+                        <button class="input-action-btn" id="btn-voice-chat" title="Mensagem de voz">
+                            <i data-lucide="mic"></i>
+                        </button>
+                        <input type="text" id="chat-input" placeholder="Diga o destino, data e moeda preferida...">
+                        <button class="input-action-btn primary" id="btn-send-chat" title="Enviar mensagem">
+                            <i data-lucide="send"></i>
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- COLUNA CENTRAL: MAPA / GLOBO 3D -->
+            <section class="map-section">
+                <div id="map-container"></div>
+                <div class="map-overlay-controls">
+                    <button class="map-btn" id="btn-zoom-in" title="Aumentar Zoom"><i data-lucide="plus"></i></button>
+                    <button class="map-btn" id="btn-zoom-out" title="Diminuir Zoom"><i data-lucide="minus"></i></button>
+                    <button class="map-btn" id="btn-rotate" title="Rotacionar Globo"><i data-lucide="rotate-cw"></i></button>
+                </div>
+                
+                <!-- Destination Info Card (Colosseum overlay style) -->
+                <div class="destination-card glass-panel" id="destination-info-panel" style="display: none;">
+                    <div class="dest-card-header">
+                        <h4 id="dest-title">Paris</h4>
+                        <span id="dest-subtitle">Europa</span>
+                        <button class="close-card-btn" id="btn-close-dest-card"><i data-lucide="x"></i></button>
+                    </div>
+                    <div class="dest-card-body">
+                        <div class="dest-info-grid">
+                            <div class="info-item">
+                                <i data-lucide="ticket"></i>
+                                <div>
+                                    <span class="label">Ingresso</span>
+                                    <span class="val" id="dest-val-ticket">--</span>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <i data-lucide="arrow-left-right"></i>
+                                <div>
+                                    <span class="label">Câmbio Local</span>
+                                    <span class="val" id="dest-val-exchange">--</span>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <i data-lucide="sun-snow"></i>
+                                <div>
+                                    <span class="label">Clima</span>
+                                    <span class="val" id="dest-val-weather">--</span>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <i data-lucide="languages"></i>
+                                <div>
+                                    <span class="label">Idioma</span>
+                                    <span class="val" id="dest-val-lang">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="dest-chart-section">
+                            <h5>Horários de Pico</h5>
+                            <div class="peak-times-chart">
+                                <div class="chart-bar" style="height: 20%;" data-time="6am"></div>
+                                <div class="chart-bar" style="height: 45%;" data-time="9am"></div>
+                                <div class="chart-bar" style="height: 75%;" data-time="12pm"></div>
+                                <div class="chart-bar" style="height: 60%;" data-time="3pm"></div>
+                                <div class="chart-bar" style="height: 90%;" data-time="6pm"></div>
+                                <div class="chart-bar" style="height: 30%;" data-time="9pm"></div>
+                            </div>
+                            <div class="chart-labels">
+                                <span>6am</span>
+                                <span>12pm</span>
+                                <span>6pm</span>
+                                <span>9pm</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- COLUNA DIREITA: DATA CARDS -->
+            <section class="data-section">
+                <!-- CARD 1: CÂMBIO -->
+                <article class="data-card glass-panel" id="card-exchange">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i data-lucide="trending-up"></i>
+                            <h4>Análise Cambial (30 dias)</h4>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="currency-row" id="currency-usd">
+                            <span class="currency-name">USD / BRL</span>
+                            <div class="currency-trend">
+                                <canvas class="sparkline" id="sparkline-usd" width="80" height="20"></canvas>
+                                <span class="trend-pct font-success">--</span>
+                            </div>
+                        </div>
+                        <div class="currency-row" id="currency-eur">
+                            <span class="currency-name">EUR / BRL</span>
+                            <div class="currency-trend">
+                                <canvas class="sparkline" id="sparkline-eur" width="80" height="20"></canvas>
+                                <span class="trend-pct font-success">--</span>
+                            </div>
+                        </div>
+                        <div class="currency-row" id="currency-dest">
+                            <span class="currency-name" id="currency-dest-name">Local / BRL</span>
+                            <div class="currency-trend">
+                                <canvas class="sparkline" id="sparkline-dest" width="80" height="20"></canvas>
+                                <span class="trend-pct">--</span>
+                            </div>
+                        </div>
+                        <div class="currency-row highlighted" id="currency-btc">
+                            <span class="currency-name"><i data-lucide="coins"></i> Bitcoin (BTC)</span>
+                            <div class="currency-trend">
+                                <canvas class="sparkline" id="sparkline-btc" width="80" height="20"></canvas>
+                                <span class="trend-pct font-error">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- CARD 2: VOOS MAIS BARATOS -->
+                <article class="data-card glass-panel" id="card-flights">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i data-lucide="plane-takeoff"></i>
+                            <h4>Passagens Aéreas de FLN</h4>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="flights-list" id="flights-container">
+                            <div class="no-data-msg">Aguardando dados de destino do Concierge...</div>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- CARD 3: ECONOMIA & CONTEXTO -->
+                <article class="data-card glass-panel" id="card-news">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i data-lucide="newspaper"></i>
+                            <h4>Economia & Risco</h4>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="news-list" id="news-container">
+                            <div class="no-data-msg">Nenhuma notícia carregada.</div>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- CARD 4: BUDGET & ITINERÁRIO -->
+                <article class="data-card glass-panel" id="card-budget">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i data-lucide="pie-chart"></i>
+                            <h4>Orçamento & Planejamento</h4>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="budget-summary">
+                            <div class="chart-container">
+                                <canvas id="budget-donut-chart" width="120" height="120"></canvas>
+                                <div class="chart-center-text">
+                                    <span class="lbl">Total Estimado</span>
+                                    <span class="val" id="budget-total-val">R$ 0</span>
+                                </div>
+                            </div>
+                            <div class="budget-legend" id="budget-legend-container">
+                                <!-- Preenchido por JS -->
+                            </div>
+                        </div>
+                        
+                        <div class="itinerary-preview">
+                            <h5>Cronograma Proposto</h5>
+                            <div class="day-selectors" id="day-selectors-container">
+                                <button class="day-btn active" data-day="1">1</button>
+                                <button class="day-btn" data-day="2">2</button>
+                                <button class="day-btn" data-day="3">3</button>
+                                <button class="day-btn" data-day="4">4</button>
+                                <button class="day-btn" data-day="5">5</button>
+                            </div>
+                            <div class="day-timeline" id="day-timeline-content">
+                                <!-- Preenchido dinamicamente por JS -->
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </section>
+        </main>
+    </section>
+
+    <!-- 3. CONFIGURATIONS MODAL -->
+    <div id="settings-modal" class="modal-backdrop">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>Configurações do n8n</h2>
+                <button class="close-modal-btn" id="btn-close-settings"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="n8n-webhook-url">URL do Webhook do Chat Trigger</label>
+                    <input type="url" id="n8n-webhook-url" placeholder="https://seu-n8n.com/webhook/..." required>
+                    <small>Insira a URL de Produção ou Teste fornecida pelo nó "Chat Trigger" do seu workflow do n8n.</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="n8n-cors-mode">Modo de Conexão</label>
+                    <select id="n8n-cors-mode">
+                        <option value="direct">Direct (Fetch) - Requer CORS habilitado no n8n</option>
+                        <option value="demo">Demo Mode (Simulação de Respostas sem n8n)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Status da Conexão</label>
+                    <div class="connection-status-indicator" id="conn-status">
+                        <span class="status-dot offline"></span>
+                        <span class="status-txt">Não Configurado</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-test-connection">Testar Conexão</button>
+                <button class="btn btn-primary" id="btn-save-settings">Salvar Configurações</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MapLibre GL JS SDK -->
+    <script src="https://unpkg.com/maplibre-gl@5.0.0/dist/maplibre-gl.js"></script>
+    
+    <!-- Turf.js for great circle arcs -->
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+    
+    <!-- Marked.js for markdown parsing -->
+    <script src="https://unpkg.com/marked@15.0.0/marked.min.js"></script>
+    
+    <!-- Custom Scripts -->
+    <script src="globe.js"></script>
+    <script src="chat.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

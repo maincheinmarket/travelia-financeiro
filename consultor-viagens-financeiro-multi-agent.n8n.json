@@ -1,0 +1,687 @@
+﻿{
+    "name":  "Consultor de Viagens Financeiro (Multi-Agent)",
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "public":  false,
+                                         "options":  {
+                                                         "responseMode":  "streaming",
+                                                         "title":  "Consultor de Viagens Financeiro",
+                                                         "subtitle":  "Planejamento de viagem com cambio, voos e contexto economico.",
+                                                         "inputPlaceholder":  "Conte seu destino, moeda e idioma preferido..."
+                                                     }
+                                     },
+                      "id":  "f3d4fb8a-8ea4-40ec-9cf3-f3080f38a7b2",
+                      "name":  "Chat Trigger",
+                      "type":  "@n8n/n8n-nodes-langchain.chatTrigger",
+                      "typeVersion":  1.4,
+                      "position":  [
+                                       160,
+                                       520
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "promptType":  "auto",
+                                         "options":  {
+                                                         "systemMessage":  "Voce e um concierge de viagens financeiro de luxo. Pergunte ao usuario: 1) Qual continente prefere? 2) Qual idioma? 3) Qual moeda? Depois alinhe destino e datas antes de chamar ferramentas. Nunca invente dados.\n\nPadrao de funcionamento aprovado:\n- O usuario pode informar o destino em texto livre, como \"Paris\", \"Japao\" ou \"Noruega\".\n- Tente inferir o codigo IATA de chegada mais provavel quando for seguro. Exemplo: Paris -\u003e CDG ou ORY; Lisboa -\u003e LIS; Toquio -\u003e HND ou NRT. Se houver ambiguidade, pergunte ao usuario qual aeroporto/cidade prefere.\n- Se faltarem datas de ida e volta, pergunte antes de acionar o Emissor de Passagens.\n- O relatorio final deve ter tom luxo/persuasivo, com uma secao financeira objetiva.\n- Use BRL como base financeira e destaque tambem a moeda escolhida pelo usuario.\n- Para voos, priorize menor preco.\n- Sempre informe que precos, disponibilidade e cambio sao estimativas e podem mudar rapidamente.\n\nOrdem obrigatoria de ferramentas apos obter informacoes suficientes:\n1. Analista de Cambio\n2. Emissor de Passagens\n3. Analista Economico\n4. Redator Final\n\nRegras de seguranca operacional:\n- Nao acione o Emissor de Passagens sem destino IATA, data de ida e data de volta.\n- Use somente os dados retornados pelas ferramentas.\n- Nao chame a mesma ferramenta repetidamente se ela ja retornou dados validos para a mesma solicitacao.\n- Ao receber os JSONs dos tres especialistas de acao, envie todos ao Redator Final e responda ao usuario somente com o texto final do Redator.",
+                                                         "maxIterations":  8,
+                                                         "returnIntermediateSteps":  false,
+                                                         "passthroughBinaryImages":  true
+                                                     },
+                                         "enableStreaming":  true
+                                     },
+                      "id":  "9397c793-c828-4faf-9d3d-db809e9389e9",
+                      "name":  "Supervisor (Concierge)",
+                      "type":  "@n8n/n8n-nodes-langchain.agent",
+                      "typeVersion":  3.1,
+                      "position":  [
+                                       520,
+                                       520
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "model":  "qwen/qwen3.6-27b",
+                                         "options":  {
+                                                         "temperature":  0,
+                                                         "maxTokensToSample":  4096
+                                                     }
+                                     },
+                      "id":  "807c8f6c-8c43-4148-bfc5-1b012d32dc8c",
+                      "name":  "Groq (Qwen 3.6 27B - Supervisor)",
+                      "type":  "@n8n/n8n-nodes-langchain.lmChatGroq",
+                      "typeVersion":  1,
+                      "position":  [
+                                       420,
+                                       780
+                                   ],
+                      "credentials":  {
+                                          "groqApi":  {
+                                                          "id":  "[INSIRA SUA CHAVE AQUI]",
+                                                          "name":  "[INSIRA SUA CHAVE AQUI]"
+                                                      }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "toolDescription":  "Analista Financeiro Quantitativo. Extrai dados brutos de APIs financeiras e retorna exclusivamente JSON válido sobre flutuação de moedas contra BRL.",
+                                         "text":  "={{ $fromAI(\u0027briefing_cambio\u0027, \u0027Contexto do usuario, continente/pais, moeda preferida e qualquer preferencia relevante para analise de cambio.\u0027, \u0027string\u0027) }}",
+                                         "options":  {
+                                                         "systemMessage":  "\u003cPAPEL\u003e\nÉs um Analista Financeiro Quantitativo. Não tens personalidade. A tua única função é extrair dados brutos de APIs financeiras e formatá-los.\n\u003c/PAPEL\u003e\n\n\u003cMISSÃO\u003e\nAciona as tuas ferramentas para obter a flutuação dos últimos 30 dias face ao Real (BRL) para as seguintes moedas: USD, EUR, GBP, NOK, SEK, CNY, JPY e BTC.\n\u003c/MISSÃO\u003e\n\n\u003cFERRAMENTAS\u003e\n- Frankfurter API (Fiat 30d): usar para USD, EUR, GBP, NOK, SEK, CNY e JPY.\n- CoinGecko API (BTC 30d): usar para BTC em BRL.\n\u003c/FERRAMENTAS\u003e\n\n\u003cREGRAS_ESTRITAS\u003e\n1. NÃO converses. NÃO expliques o que fizeste.\n2. Se uma API não devolver um dado, utiliza o valor null. NUNCA inventes cotações.\n3. A tua resposta final deve ser EXCLUSIVAMENTE um objeto JSON válido seguindo a estrutura abaixo, sem formatação Markdown ao redor do código:\n{\n  \"base\": \"BRL\",\n  \"periodo_dias\": 30,\n  \"fiat\": [\n    {\"moeda\": \"USD\", \"cotacao_inicio\": 0.0, \"cotacao_fim\": 0.0, \"variacao_percentual\": 0.0}\n  ],\n  \"cripto\": [\n    {\"ativo\": \"BTC\", \"preco_inicio_brl\": 0.0, \"preco_fim_brl\": 0.0, \"variacao_percentual\": 0.0}\n  ]\n}\n\u003c/REGRAS_ESTRITAS\u003e",
+                                                         "maxIterations":  5,
+                                                         "returnIntermediateSteps":  false
+                                                     }
+                                     },
+                      "id":  "7d17137e-32b9-40b0-99eb-13429f3b07175",
+                      "name":  "Analista de Cambio",
+                      "type":  "@n8n/n8n-nodes-langchain.agentTool",
+                      "typeVersion":  2.2,
+                      "position":  [
+                                       1040,
+                                       120
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "model":  {
+                                                       "__rl":  true,
+                                                       "mode":  "id",
+                                                       "value":  "openai/gpt-oss-120b:free"
+                                                   },
+                                         "responsesApiEnabled":  false,
+                                         "options":  {
+                                                         "baseURL":  "https://openrouter.ai/api/v1",
+                                                         "temperature":  0,
+                                                         "timeout":  60000,
+                                                         "maxRetries":  2
+                                                     },
+                                         "baseURL":  "https://openrouter.ai/api/v1"
+                                     },
+                      "id":  "cb95ea43-0081-4bd0-a694-d2793d363ac4",
+                      "name":  "OpenRouter (GPT OSS 120b - Cambio)",
+                      "type":  "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       920,
+                                       340
+                                   ],
+                      "credentials":  {
+                                          "openAiApi":  {
+                                                            "id":  "[INSIRA SUA CHAVE AQUI]",
+                                                            "name":  "[INSIRA SUA CHAVE AQUI]"
+                                                        }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "GET",
+                                         "url":  "={{ \u0027https://api.frankfurter.app/\u0027 + $now.minus({ days: 30 }).toFormat(\u0027yyyy-MM-dd\u0027) + \u0027..\u0027 + $now.toFormat(\u0027yyyy-MM-dd\u0027) + \u0027?from=BRL\u0026to=USD,EUR,GBP,NOK,SEK,CNY,JPY\u0027 }}",
+                                         "authentication":  "none",
+                                         "options":  {
+                                                         "response":  {
+                                                                          "response":  {
+                                                                                           "responseFormat":  "json",
+                                                                                           "neverError":  true
+                                                                                       }
+                                                                      },
+                                                         "timeout":  30000
+                                                     },
+                                         "optimizeResponse":  true,
+                                         "responseType":  "json",
+                                         "fieldsToInclude":  "all"
+                                     },
+                      "id":  "bd1f58bb-733d-4c21-9db8-d684797a78df",
+                      "name":  "Frankfurter API (Fiat 30d)",
+                      "type":  "n8n-nodes-base.httpRequestTool",
+                      "typeVersion":  4.4,
+                      "position":  [
+                                       1120,
+                                       340
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "GET",
+                                         "url":  "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=brl\u0026days=30\u0026interval=daily",
+                                         "authentication":  "none",
+                                         "options":  {
+                                                         "response":  {
+                                                                          "response":  {
+                                                                                           "responseFormat":  "json",
+                                                                                           "neverError":  true
+                                                                                       }
+                                                                      },
+                                                         "timeout":  30000
+                                                     },
+                                         "optimizeResponse":  true,
+                                         "responseType":  "json",
+                                         "fieldsToInclude":  "all"
+                                     },
+                      "id":  "ab61dc7a-8d85-4b98-97c0-62a69f27d71f",
+                      "name":  "CoinGecko API (BTC 30d)",
+                      "type":  "n8n-nodes-base.httpRequestTool",
+                      "typeVersion":  4.4,
+                      "position":  [
+                                       1320,
+                                       340
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "toolDescription":  "Emissor de Passagens. Recebe destino em texto livre ou IATA, confirma/usa IATA quando seguro, busca no SerpApi Google Flights os 3 voos mais baratos a partir de FLN e retorna companhia, preco individual, preco para casal e aviso de bagagem/variacao.",
+                                         "text":  "={{ $fromAI(\u0027briefing_passagens\u0027, \u0027Destino, codigo IATA de chegada, datas de ida e volta, moeda e idioma. Nao chame esta ferramenta sem arrival_id, outbound_date e return_date.\u0027, \u0027string\u0027) }}",
+                                         "options":  {
+                                                         "systemMessage":  "Missao e Data Mapping: Buscar os 3 voos mais baratos para o destino usando a ferramenta SerpApi Google Flights. A origem departure_id e fixa em FLN. Use type=1 para ida e volta, currency=BRL e sort_by=2 para preco. O usuario pode informar destino em texto livre, mas esta ferramenta so deve ser chamada quando houver arrival_id IATA, outbound_date e return_date. A resposta da SerpApi traz resultados em best_flights e/ou other_flights. Combine essas listas, ordene pelo campo numerico price em ordem crescente e pegue os 3 menores. Para Companhia Aerea, use flights[0].airline quando existir; se houver multiplas pernas, indique a primeira companhia e mencione conexoes em observacoes. A API retorna valor individual base no campo price; processe os dados e retorne somente JSON estrito contendo: Companhia Aerea, Preco Individual, Preco para Casal multiplicando o valor individual por 2, e os avisos padrao \"Valores nao incluem bagagem despachada\" e \"Precos e disponibilidade podem mudar rapidamente\". Formato: {\"origem\":\"FLN\",\"destino_texto\":\"...\",\"destino_iata\":\"...\",\"moeda\":\"BRL\",\"criterio\":\"menor_preco\",\"voos\":[{\"companhia_aerea\":\"...\",\"preco_individual\":number|null,\"preco_casal\":number|null,\"moeda\":\"BRL\",\"aviso_bagagem\":\"Valores nao incluem bagagem despachada\",\"aviso_variacao\":\"Precos e disponibilidade podem mudar rapidamente\"}],\"fonte\":\"SerpApi Google Flights\",\"observacoes\":[string]}. Nunca invente dados; se nao houver voo, retorne voos: [].",
+                                                         "maxIterations":  5,
+                                                         "returnIntermediateSteps":  false
+                                                     }
+                                     },
+                      "id":  "a8932056-a2e9-4336-b910-bc640497b3c3",
+                      "name":  "Emissor de Passagens",
+                      "type":  "@n8n/n8n-nodes-langchain.agentTool",
+                      "typeVersion":  2.2,
+                      "position":  [
+                                       1040,
+                                       520
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "model":  {
+                                                       "__rl":  true,
+                                                       "mode":  "id",
+                                                       "value":  "openai/gpt-oss-120b:free"
+                                                   },
+                                         "responsesApiEnabled":  false,
+                                         "options":  {
+                                                         "baseURL":  "https://openrouter.ai/api/v1",
+                                                         "temperature":  0,
+                                                         "timeout":  60000,
+                                                         "maxRetries":  2
+                                                     },
+                                         "baseURL":  "https://openrouter.ai/api/v1"
+                                     },
+                      "id":  "37c67e53-1485-4cd3-8f03-941d6727ed07",
+                      "name":  "OpenRouter (GPT OSS 120b - Passagens)",
+                      "type":  "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       920,
+                                       740
+                                   ],
+                      "credentials":  {
+                                          "openAiApi":  {
+                                                            "id":  "[INSIRA SUA CHAVE AQUI]",
+                                                            "name":  "[INSIRA SUA CHAVE AQUI]"
+                                                        }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "GET",
+                                         "url":  "https://serpapi.com/search.json",
+                                         "authentication":  "genericCredentialType",
+                                         "genericAuthType":  "httpQueryAuth",
+                                         "sendQuery":  true,
+                                         "specifyQuery":  "keypair",
+                                         "queryParameters":  {
+                                                                 "parameters":  [
+                                                                                    {
+                                                                                        "name":  "engine",
+                                                                                        "value":  "google_flights"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "departure_id",
+                                                                                        "value":  "FLN"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "arrival_id",
+                                                                                        "value":  "={{ $fromAI(\u0027arrival_id\u0027, \u0027Codigo IATA do destino. Exemplo: LIS, CDG, NRT\u0027, \u0027string\u0027) }}"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "outbound_date",
+                                                                                        "value":  "={{ $fromAI(\u0027outbound_date\u0027, \u0027Data de ida no formato YYYY-MM-DD\u0027, \u0027string\u0027) }}"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "return_date",
+                                                                                        "value":  "={{ $fromAI(\u0027return_date\u0027, \u0027Data de volta no formato YYYY-MM-DD\u0027, \u0027string\u0027) }}"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "type",
+                                                                                        "value":  "1"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "adults",
+                                                                                        "value":  "1"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "currency",
+                                                                                        "value":  "BRL"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "hl",
+                                                                                        "value":  "pt-br"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "gl",
+                                                                                        "value":  "br"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "sort_by",
+                                                                                        "value":  "2"
+                                                                                    }
+                                                                                ]
+                                                             },
+                                         "options":  {
+                                                         "response":  {
+                                                                          "response":  {
+                                                                                           "responseFormat":  "json",
+                                                                                           "neverError":  true
+                                                                                       }
+                                                                      },
+                                                         "timeout":  30000
+                                                     },
+                                         "optimizeResponse":  true,
+                                         "responseType":  "json",
+                                         "fieldsToInclude":  "all"
+                                     },
+                      "id":  "a6da8c1b-8cf5-44b7-ad2f-fbbd8034162d",
+                      "name":  "SerpApi Google Flights (FLN)",
+                      "type":  "n8n-nodes-base.httpRequestTool",
+                      "typeVersion":  4.4,
+                      "position":  [
+                                       1120,
+                                       740
+                                   ],
+                      "credentials":  {
+                                          "httpQueryAuth":  {
+                                                                "id":  "[INSIRA SUA CHAVE AQUI]",
+                                                                "name":  "[INSIRA SUA CHAVE AQUI]"
+                                                            }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "toolDescription":  "Jornalista de Dados Económicos. Pesquisa Google News via SerpApi e retorna exclusivamente JSON com 3 manchetes econômicas recentes.",
+                                         "text":  "={{ $fromAI(\u0027briefing_economico\u0027, \u0027Pais ou continente escolhido, idioma e moeda preferida para pesquisar noticias economicas recentes.\u0027, \u0027string\u0027) }}",
+                                         "options":  {
+                                                         "systemMessage":  "\u003cPAPEL\u003e\nÉs um Jornalista de Dados Económicos.\n\u003c/PAPEL\u003e\n\n\u003cMISSÃO\u003e\nUsa a ferramenta de pesquisa (Google News via SerpApi) com a query \"Economia [Destino]\".\nRetorna as 3 manchetes mais relevantes e recentes focadas em finanças e mercado.\n\u003c/MISSÃO\u003e\n\n\u003cPARÂMETROS_OPERACIONAIS\u003e\n- Usa engine=google_news.\n- Usa so=1 para ordenar por data.\n- A resposta principal vem em news_results.\n- Campos úteis: title, source.name, link, date e iso_date.\n\u003c/PARÂMETROS_OPERACIONAIS\u003e\n\n\u003cREGRAS_ESTRITAS\u003e\n1. NUNCA inventes notícias. Usa apenas o que a ferramenta devolver.\n2. A tua saída deve ser EXCLUSIVAMENTE um objeto JSON contendo um array \"noticias\" com os campos: titulo, fonte, data e link.\n3. Não escrevas qualquer texto fora do bloco JSON.\n4. Se faltar algum campo, usa null.\n\u003c/REGRAS_ESTRITAS\u003e",
+                                                         "maxIterations":  5,
+                                                         "returnIntermediateSteps":  false
+                                                     }
+                                     },
+                      "id":  "02537797-a1a1-4955-828c-370e53340659",
+                      "name":  "Analista Economico",
+                      "type":  "@n8n/n8n-nodes-langchain.agentTool",
+                      "typeVersion":  2.2,
+                      "position":  [
+                                       1040,
+                                       920
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "model":  {
+                                                       "__rl":  true,
+                                                       "mode":  "id",
+                                                       "value":  "openai/gpt-oss-120b:free"
+                                                   },
+                                         "responsesApiEnabled":  false,
+                                         "options":  {
+                                                         "baseURL":  "https://openrouter.ai/api/v1",
+                                                         "temperature":  0,
+                                                         "timeout":  60000,
+                                                         "maxRetries":  2
+                                                     },
+                                         "baseURL":  "https://openrouter.ai/api/v1"
+                                     },
+                      "id":  "a1c9092a-e7c0-4d79-af97-5ea4042511ab",
+                      "name":  "OpenRouter (GPT OSS 120b - Economico)",
+                      "type":  "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       920,
+                                       1140
+                                   ],
+                      "credentials":  {
+                                          "openAiApi":  {
+                                                            "id":  "[INSIRA SUA CHAVE AQUI]",
+                                                            "name":  "[INSIRA SUA CHAVE AQUI]"
+                                                        }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "GET",
+                                         "url":  "https://serpapi.com/search.json",
+                                         "authentication":  "genericCredentialType",
+                                         "genericAuthType":  "httpQueryAuth",
+                                         "sendQuery":  true,
+                                         "specifyQuery":  "keypair",
+                                         "queryParameters":  {
+                                                                 "parameters":  [
+                                                                                    {
+                                                                                        "name":  "engine",
+                                                                                        "value":  "google_news"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "q",
+                                                                                        "value":  "={{ $fromAI(\u0027query\u0027, \u0027Consulta de noticias. Exemplo: Economia Europa ou Economia Japao\u0027, \u0027string\u0027) }}"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "hl",
+                                                                                        "value":  "pt-BR"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "gl",
+                                                                                        "value":  "br"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "so",
+                                                                                        "value":  "1"
+                                                                                    }
+                                                                                ]
+                                                             },
+                                         "options":  {
+                                                         "response":  {
+                                                                          "response":  {
+                                                                                           "responseFormat":  "json",
+                                                                                           "neverError":  true
+                                                                                       }
+                                                                      },
+                                                         "timeout":  30000
+                                                     },
+                                         "optimizeResponse":  true,
+                                         "responseType":  "json",
+                                         "fieldsToInclude":  "all"
+                                     },
+                      "id":  "bd7703fb-b789-4ab9-a52e-c1436320f79d",
+                      "name":  "SerpApi Tool (Google News)",
+                      "type":  "n8n-nodes-base.httpRequestTool",
+                      "typeVersion":  4.4,
+                      "position":  [
+                                       1120,
+                                       1140
+                                   ],
+                      "credentials":  {
+                                          "httpQueryAuth":  {
+                                                                "id":  "[INSIRA SUA CHAVE AQUI]",
+                                                                "name":  "[INSIRA SUA CHAVE AQUI]"
+                                                            }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "toolDescription":  "Redator Final. Recebe JSON de cambio, voos e noticias e transforma em relatorio humano, luxo/persuasivo, com secao financeira objetiva.",
+                                         "text":  "={{ $fromAI(\u0027json_consolidado\u0027, \u0027JSON consolidado contendo voos, oscilacao de moedas, noticias economicas e preferencias do usuario.\u0027, \u0027string\u0027) }}",
+                                         "options":  {
+                                                         "systemMessage":  "Voce e um Copywriter de viagens de luxo com rigor financeiro. Receba o JSON dos voos, oscilacao de moedas e noticias, e transforme em um relatorio humano, empatico e persuasivo para o usuario.\n\nPadrao do relatorio:\n- Tom luxo/persuasivo, sem exagerar nem inventar dados.\n- Inclua uma secao financeira objetiva.\n- Use BRL como base financeira e destaque tambem a moeda escolhida pelo usuario.\n- Para voos, destaque primeiro os menores precos.\n- Preserve os avisos: \"Valores nao incluem bagagem despachada\" e \"Precos, disponibilidade e cambio podem mudar rapidamente\".\n- Responda no idioma solicitado pelo usuario.\n- Nao invente precos, datas, companhias, aeroportos, manchetes ou percentuais.\n- Estruture a resposta com: resumo executivo, destino e periodo, cambio e risco financeiro, voos por menor preco, contexto economico recente, recomendacao final.\n- Se algum bloco de dados estiver incompleto, explique a limitacao de forma elegante e objetiva.",
+                                                         "maxIterations":  3,
+                                                         "returnIntermediateSteps":  false
+                                                     }
+                                     },
+                      "id":  "af96d4f8-c587-4a93-9e42-485a290d350b",
+                      "name":  "Redator Final",
+                      "type":  "@n8n/n8n-nodes-langchain.agentTool",
+                      "typeVersion":  2.2,
+                      "position":  [
+                                       1040,
+                                       1320
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "model":  {
+                                                       "__rl":  true,
+                                                       "mode":  "id",
+                                                       "value":  "google/gemma-4-26b-a4b-it:free"
+                                                   },
+                                         "responsesApiEnabled":  false,
+                                         "options":  {
+                                                         "baseURL":  "https://openrouter.ai/api/v1",
+                                                         "temperature":  0.7,
+                                                         "timeout":  60000,
+                                                         "maxRetries":  2
+                                                     },
+                                         "baseURL":  "https://openrouter.ai/api/v1"
+                                     },
+                      "id":  "e3cbfb1b-4f03-4c19-9f7c-6a071ed413b7",
+                      "name":  "OpenRouter (Gemma-4-26b - Redator)",
+                      "type":  "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       920,
+                                       1540
+                                   ],
+                      "credentials":  {
+                                          "openAiApi":  {
+                                                            "id":  "[INSIRA SUA CHAVE AQUI]",
+                                                            "name":  "[INSIRA SUA CHAVE AQUI]"
+                                                        }
+                                      }
+                  },
+                  {
+                      "id":  "004ec721-be6b-4786-bace-c4fe287a4f64",
+                      "name":  "Supabase Postgres Chat Memory",
+                      "type":  "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+                      "typeVersion":  1.4,
+                      "position":  [
+                                       176,
+                                       1328
+                                   ],
+                      "parameters":  {
+                                         "sessionIdType":  "fromInput",
+                                         "tableName":  "n8n_chat_histories",
+                                         "contextWindowLength":  12
+                                     },
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "[INSIRA SUA CHAVE AQUI]",
+                                                           "name":  "[INSIRA SUA CHAVE AQUI]"
+                                                       }
+                                      }
+                  }
+              ],
+    "connections":  {
+                        "Chat Trigger":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Supervisor (Concierge)",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         },
+                        "Groq (Qwen 3.6 27B - Supervisor)":  {
+                                                                 "ai_languageModel":  [
+                                                                                          [
+                                                                                              {
+                                                                                                  "node":  "Supervisor (Concierge)",
+                                                                                                  "type":  "ai_languageModel",
+                                                                                                  "index":  0
+                                                                                              }
+                                                                                          ]
+                                                                                      ]
+                                                             },
+                        "Analista de Cambio":  {
+                                                   "ai_tool":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "Supervisor (Concierge)",
+                                                                           "type":  "ai_tool",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                               },
+                        "OpenRouter (GPT OSS 120b - Cambio)":  {
+                                                                   "ai_languageModel":  [
+                                                                                            [
+                                                                                                {
+                                                                                                    "node":  "Analista de Cambio",
+                                                                                                    "type":  "ai_languageModel",
+                                                                                                    "index":  0
+                                                                                                }
+                                                                                            ]
+                                                                                        ]
+                                                               },
+                        "Frankfurter API (Fiat 30d)":  {
+                                                           "ai_tool":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Analista de Cambio",
+                                                                                   "type":  "ai_tool",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                       },
+                        "CoinGecko API (BTC 30d)":  {
+                                                        "ai_tool":  [
+                                                                        [
+                                                                            {
+                                                                                "node":  "Analista de Cambio",
+                                                                                "type":  "ai_tool",
+                                                                                "index":  0
+                                                                            }
+                                                                        ]
+                                                                    ]
+                                                    },
+                        "Emissor de Passagens":  {
+                                                     "ai_tool":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "Supervisor (Concierge)",
+                                                                             "type":  "ai_tool",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                 },
+                        "OpenRouter (GPT OSS 120b - Passagens)":  {
+                                                                      "ai_languageModel":  [
+                                                                                               [
+                                                                                                   {
+                                                                                                       "node":  "Emissor de Passagens",
+                                                                                                       "type":  "ai_languageModel",
+                                                                                                       "index":  0
+                                                                                                   }
+                                                                                               ]
+                                                                                           ]
+                                                                  },
+                        "SerpApi Google Flights (FLN)":  {
+                                                             "ai_tool":  [
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "Emissor de Passagens",
+                                                                                     "type":  "ai_tool",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ]
+                                                                         ]
+                                                         },
+                        "Analista Economico":  {
+                                                   "ai_tool":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "Supervisor (Concierge)",
+                                                                           "type":  "ai_tool",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                               },
+                        "OpenRouter (GPT OSS 120b - Economico)":  {
+                                                                      "ai_languageModel":  [
+                                                                                               [
+                                                                                                   {
+                                                                                                       "node":  "Analista Economico",
+                                                                                                       "type":  "ai_languageModel",
+                                                                                                       "index":  0
+                                                                                                   }
+                                                                                               ]
+                                                                                           ]
+                                                                  },
+                        "SerpApi Tool (Google News)":  {
+                                                           "ai_tool":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Analista Economico",
+                                                                                   "type":  "ai_tool",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                       },
+                        "Redator Final":  {
+                                              "ai_tool":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Supervisor (Concierge)",
+                                                                      "type":  "ai_tool",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                          },
+                        "OpenRouter (Gemma-4-26b - Redator)":  {
+                                                                   "ai_languageModel":  [
+                                                                                            [
+                                                                                                {
+                                                                                                    "node":  "Redator Final",
+                                                                                                    "type":  "ai_languageModel",
+                                                                                                    "index":  0
+                                                                                                }
+                                                                                            ]
+                                                                                        ]
+                                                               },
+                        "Supabase Postgres Chat Memory":  {
+                                                              "ai_memory":  [
+                                                                                [
+                                                                                    {
+                                                                                        "node":  "Supervisor (Concierge)1",
+                                                                                        "type":  "ai_memory",
+                                                                                        "index":  0
+                                                                                    },
+                                                                                    {
+                                                                                        "node":  "Analista de Cambio",
+                                                                                        "type":  "ai_memory",
+                                                                                        "index":  0
+                                                                                    },
+                                                                                    {
+                                                                                        "node":  "Emissor de Passagens1",
+                                                                                        "type":  "ai_memory",
+                                                                                        "index":  0
+                                                                                    },
+                                                                                    {
+                                                                                        "node":  "Analista Economico",
+                                                                                        "type":  "ai_memory",
+                                                                                        "index":  0
+                                                                                    },
+                                                                                    {
+                                                                                        "node":  "Redator Final1",
+                                                                                        "type":  "ai_memory",
+                                                                                        "index":  0
+                                                                                    }
+                                                                                ]
+                                                                            ]
+                                                          }
+                    },
+    "pinData":  {
+
+                },
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "availableInMCP":  true
+                 },
+    "staticData":  null,
+    "tags":  [
+
+             ],
+    "triggerCount":  0,
+    "updatedAt":  "2026-06-23T00:00:00.000Z",
+    "versionId":  "consultor-viagens-financeiro-multi-agent-v1"
+}
