@@ -24,7 +24,7 @@ mode=webhook
 authentication=none
 responseMode=streaming
 allowedOrigins=https://travelia-financeiro.vercel.app,http://localhost:3000,http://localhost:5173,http://127.0.0.1:5500
-loadPreviousSession=notSupported
+loadPreviousSession=memory
 allowFileUploads=false
 ```
 
@@ -32,8 +32,9 @@ Justificativas:
 
 *   `streaming` melhora a percepção de velocidade em respostas longas do agente.
 *   `allowedOrigins` não deve ficar como `*` em produção.
-*   `loadPreviousSession` fica desligado por padrão para evitar execuções em carregamento de página. A memória do agente continua funcionando por `sessionId`.
-*   Se o histórico visual for ativado no futuro, conecte o Chat Trigger e o Agent à mesma memória, conforme recomendação do n8n.
+*   `loadPreviousSession=memory` permite que o frontend use `action=loadPreviousSession` quando o usuário ativar o histórico visual.
+*   O Chat Trigger e o Supervisor usam a mesma memória Postgres (`Memoria Supervisor`) para manter o histórico visual e o contexto lógico alinhados por `sessionId`.
+*   No site, o carregamento de histórico continua desligado por padrão para evitar requisições extras em page load; ele só é chamado quando `travelia_load_history=true`.
 
 ### Endpoints e Ações
 O frontend envia requisições utilizando os seguintes parâmetros e estruturas:

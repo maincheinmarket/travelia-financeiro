@@ -20,7 +20,7 @@ Status atual:
 
 ```text
 Publicado e ativo
-activeVersionId=f971d442-d7c1-4acc-ac2b-a978260c88b1
+activeVersionId=ec3f5779-3deb-48d1-b776-63ca4392262d
 ```
 
 ## Arquitetura Geral
@@ -48,7 +48,7 @@ mode=webhook
 authentication=none
 responseMode=streaming
 allowedOrigins=https://travelia-financeiro.vercel.app,http://localhost:3000,http://localhost:5173,http://127.0.0.1:5500
-loadPreviousSession=notSupported
+loadPreviousSession=memory
 allowFileUploads=false
 ```
 
@@ -56,8 +56,8 @@ Observações:
 
 - O site mantém `sessionId` em `localStorage` e envia em toda mensagem.
 - A memória do agente usa esse `sessionId`; por isso o histórico lógico continua no n8n.
-- O histórico visual no carregamento do site fica desligado por padrão para evitar execuções ou erros em page load.
-- Se o histórico visual for ativado no n8n, conecte o Chat Trigger e o Supervisor à mesma memória.
+- O Chat Trigger está conectado à mesma `Memoria Supervisor`, permitindo `action=loadPreviousSession` para restaurar histórico visual quando o site ativar essa opção.
+- O histórico visual no carregamento do site fica desligado por padrão no frontend para evitar requisições extras em page load.
 
 ## Entrada do Usuário
 
@@ -127,7 +127,7 @@ Observação sobre limite Groq:
 No plano gratuito atual, o qwen/qwen3.6-27b tinha limite prático observado de 8000 TPM.
 O orquestrador foi trocado para meta-llama/llama-4-scout-17b-16e-instruct, que tem limite gratuito publicado de 30K TPM.
 O pedido total conta prompt + tools + memória + maxTokensToSample.
-Por isso o Supervisor pode voltar a usar 4096 tokens de saída com mais estabilidade.
+O Supervisor usa 4096 tokens de saída para reduzir falhas de capacidade no Groq; o relatório longo fica no Redator Final, com 8192 tokens via OpenRouter.
 ```
 
 Responsabilidade:
@@ -559,7 +559,7 @@ Tipo:
 Nós e tabelas:
 
 ```text
-Memoria Supervisor  -> public.n8n_chat_histories      -> contextWindowLength=2
+Memoria Supervisor  -> public.n8n_chat_histories      -> contextWindowLength=4
 Memoria Cambio      -> public.n8n_memory_cambio       -> contextWindowLength=2
 Memoria Passagens   -> public.n8n_memory_passagens    -> contextWindowLength=2
 Memoria Economico   -> public.n8n_memory_economico    -> contextWindowLength=2
@@ -582,6 +582,7 @@ Memória conectada a:
 
 ```text
 Memoria Supervisor -> Supervisor (Concierge)1
+Memoria Supervisor -> Chat Trigger
 Memoria Cambio -> Analista de Cambio
 Memoria Passagens -> Emissor de Passagens1
 Memoria Economico -> Analista Economico
@@ -961,6 +962,9 @@ Correções aplicadas após esse teste:
 - Contexto dos especialistas reduzido para 2 interações.
 - Orquestrador trocado de qwen/qwen3.6-27b para meta-llama/llama-4-scout-17b-16e-instruct por causa do TPM gratuito maior.
 - Saída máxima do Supervisor ajustada para 4096 tokens.
+- Redator Final configurado com 8192 tokens via OpenRouter para relatórios longos e payload `TRAVELIA_DATA`.
+- Modelos configurados com retry automático para reduzir falhas transitórias de provedor.
+- Chat Trigger conectado à `Memoria Supervisor` e configurado com `loadPreviousSession=memory`.
 - Prompt do Supervisor reforçado para usar datas futuras quando o usuário informar dia/mês sem ano.
 
 Execução manual `17`:
