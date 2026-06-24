@@ -1021,6 +1021,10 @@ https://travelia-financeiro.vercel.app/
 
 Conclusões práticas:
 
+- O site já vem conectado por padrão ao Chat Trigger publicado:
+  `https://maincheinmarket.app.n8n.cloud/webhook/6a85025f-0078-48dc-b442-c0309e01ba46/chat`
+- O modo padrão do frontend é `direct`; o modo demo continua disponível apenas como fallback manual.
+- `Website/app.js` aplica uma migração de `localStorage` para usuários antigos que ainda estavam em `demo`.
 - O frontend envia mensagens para o webhook com `POST ?action=sendMessage`.
 - O corpo enviado contém `action`, `sessionId` e `chatInput`.
 - O frontend aceita resposta SSE ou JSON/texto final.

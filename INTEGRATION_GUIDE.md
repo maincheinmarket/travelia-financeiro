@@ -43,6 +43,7 @@ O frontend envia requisições utilizando os seguintes parâmetros e estruturas:
 Enviado quando o usuário digita uma mensagem no chat ou clica em um chip de sugestão rápida.
 
 *   **URL:** `POST <n8n_webhook_url>?action=sendMessage`
+*   **URL padrão em produção:** `https://maincheinmarket.app.n8n.cloud/webhook/6a85025f-0078-48dc-b442-c0309e01ba46/chat`
 *   **Headers:** `Content-Type: application/json`
 *   **Corpo da Requisição (JSON):**
     ```json
@@ -59,6 +60,8 @@ Enviado quando o usuário digita uma mensagem no chat ou clica em um chip de sug
 ### Boas práticas aplicadas no frontend
 
 *   A URL do webhook é normalizada antes de salvar; `action` e `sessionId` antigos são removidos.
+*   O site vem conectado por padrão ao Chat Trigger publicado e usa `Direct` como modo padrão.
+*   Uma migração de `localStorage` (`travelia_n8n_default_version`) troca usuários antigos que ainda estavam no modo demo para a conexão n8n padrão uma única vez.
 *   O site monta a URL com `URLSearchParams`, evitando concatenação frágil com `?` e `&`.
 *   O envio usa `AbortController` com timeout de 180s.
 *   O botão de envio e o input ficam bloqueados enquanto uma execução está em andamento.

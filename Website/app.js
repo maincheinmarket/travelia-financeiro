@@ -2,6 +2,10 @@
    TRAVELIA CENTRAL APP & UI COORDINATOR (THEME, CANVAS, DEMO RESPONSE & SETUP)
    ========================================================================== */
 
+const DEFAULT_N8N_WEBHOOK_URL = 'https://maincheinmarket.app.n8n.cloud/webhook/6a85025f-0078-48dc-b442-c0309e01ba46/chat';
+const DEFAULT_CONNECTION_MODE = 'direct';
+const N8N_DEFAULT_CONNECTION_VERSION = '2026-06-24';
+
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Initial setups
     lucide.createIcons();
@@ -143,8 +147,10 @@ function updateThemeToggleIcons(theme) {
    SETTINGS MODAL & LOCALSTORAGE
    ========================================================================== */
 function initSettings() {
-    let url = localStorage.getItem('travelia_n8n_url') || '';
-    let mode = localStorage.getItem('travelia_conn_mode') || 'demo';
+    migrateDefaultN8NConnection();
+
+    let url = localStorage.getItem('travelia_n8n_url') || DEFAULT_N8N_WEBHOOK_URL;
+    let mode = localStorage.getItem('travelia_conn_mode') || DEFAULT_CONNECTION_MODE;
     let loadHistory = localStorage.getItem('travelia_load_history') === 'true';
 
     document.getElementById('n8n-webhook-url').value = url;
@@ -154,10 +160,25 @@ function initSettings() {
     updateConnectionIndicator(mode, url ? 'configured' : 'not_configured');
 }
 
+function migrateDefaultN8NConnection() {
+    if (localStorage.getItem('travelia_n8n_default_version') === N8N_DEFAULT_CONNECTION_VERSION) return;
+
+    if (!localStorage.getItem('travelia_n8n_url')) {
+        localStorage.setItem('travelia_n8n_url', DEFAULT_N8N_WEBHOOK_URL);
+    }
+
+    const storedMode = localStorage.getItem('travelia_conn_mode');
+    if (!storedMode || storedMode === 'demo') {
+        localStorage.setItem('travelia_conn_mode', DEFAULT_CONNECTION_MODE);
+    }
+
+    localStorage.setItem('travelia_n8n_default_version', N8N_DEFAULT_CONNECTION_VERSION);
+}
+
 function getSettings() {
     return {
-        url: localStorage.getItem('travelia_n8n_url') || '',
-        mode: localStorage.getItem('travelia_conn_mode') || 'demo',
+        url: localStorage.getItem('travelia_n8n_url') || DEFAULT_N8N_WEBHOOK_URL,
+        mode: localStorage.getItem('travelia_conn_mode') || DEFAULT_CONNECTION_MODE,
         loadHistory: localStorage.getItem('travelia_load_history') === 'true'
     };
 }
