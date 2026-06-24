@@ -155,7 +155,7 @@
                         <button class="input-action-btn" id="btn-voice-chat" title="Mensagem de voz">
                             <i data-lucide="mic"></i>
                         </button>
-                        <input type="text" id="chat-input" placeholder="Diga o destino, data e moeda preferida...">
+                        <input type="text" id="chat-input" placeholder="Ex: Europa mês que vem, praia barata, Paris em outubro...">
                         <button class="input-action-btn primary" id="btn-send-chat" title="Enviar mensagem">
                             <i data-lucide="send"></i>
                         </button>
@@ -356,7 +356,7 @@
                 <div class="form-group">
                     <label for="n8n-webhook-url">URL do Webhook do Chat Trigger</label>
                     <input type="url" id="n8n-webhook-url" placeholder="https://seu-n8n.com/webhook/..." required>
-                    <small>Insira a URL de Produção ou Teste fornecida pelo nó "Chat Trigger" do seu workflow do n8n.</small>
+                    <small>Use a URL pública do Chat Trigger. O site adiciona <code>?action=sendMessage</code> automaticamente.</small>
                 </div>
                 
                 <div class="form-group">
@@ -365,6 +365,14 @@
                         <option value="direct">Direct (Fetch) - Requer CORS habilitado no n8n</option>
                         <option value="demo">Demo Mode (Simulação de Respostas sem n8n)</option>
                     </select>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <label class="checkbox-label" for="n8n-load-history">
+                        <input type="checkbox" id="n8n-load-history">
+                        <span>Restaurar histórico visível ao abrir</span>
+                    </label>
+                    <small>Ative apenas se o Chat Trigger estiver configurado para carregar sessão anterior por memória. Desligado por padrão para evitar execuções desnecessárias.</small>
                 </div>
 
                 <div class="form-group">

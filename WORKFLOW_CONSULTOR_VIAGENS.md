@@ -16,6 +16,13 @@ ID do workflow:
 3jsyAK3vWufht9QF
 ```
 
+Status atual:
+
+```text
+Publicado e ativo
+activeVersionId=f971d442-d7c1-4acc-ac2b-a978260c88b1
+```
+
 ## Arquitetura Geral
 
 O fluxo usa o padrão:
@@ -32,6 +39,25 @@ Chat Trigger
 O Supervisor é o único nó conectado ao fluxo principal do chat. Os demais agentes são ferramentas LangChain conectadas ao Supervisor via `ai_tool`.
 
 Essa arquitetura evita loops no fluxo principal: existe apenas uma conexão `main`, do `Chat Trigger` para o Supervisor. Todas as chamadas aos especialistas acontecem como ferramentas internas do agente.
+
+Configuração atual do Chat Trigger para frontend:
+
+```text
+public=true
+mode=webhook
+authentication=none
+responseMode=streaming
+allowedOrigins=https://travelia-financeiro.vercel.app,http://localhost:3000,http://localhost:5173,http://127.0.0.1:5500
+loadPreviousSession=notSupported
+allowFileUploads=false
+```
+
+Observações:
+
+- O site mantém `sessionId` em `localStorage` e envia em toda mensagem.
+- A memória do agente usa esse `sessionId`; por isso o histórico lógico continua no n8n.
+- O histórico visual no carregamento do site fica desligado por padrão para evitar execuções ou erros em page load.
+- Se o histórico visual for ativado no n8n, conecte o Chat Trigger e o Supervisor à mesma memória.
 
 ## Entrada do Usuário
 
@@ -980,3 +1006,82 @@ Prompt agora cobre hoje, amanhã, semana que vem, mês que vem, daqui N dias e d
 - Para inputs como "Europa mês que vem", o comportamento esperado é: inferir datas padrão, testar até 5 destinos candidatos, escolher melhor custo e entregar relatório.
 - Não conecte especialistas ao fluxo `main`; eles devem permanecer como `ai_tool`.
 - Qualquer mudança em credenciais deve ser feita pelo usuário no n8n; o MCP não expõe segredos.
+
+## Integração Com o Site Travelia
+
+Site analisado:
+
+```text
+https://travelia-financeiro.vercel.app/
+```
+
+Conclusões práticas:
+
+- O frontend envia mensagens para o webhook com `POST ?action=sendMessage`.
+- O corpo enviado contém `action`, `sessionId` e `chatInput`.
+- O frontend aceita resposta SSE ou JSON/texto final.
+- O gatilho visual mais importante é textual: `Website/chat.js` procura códigos IATA no texto final com regex de 3 letras maiúsculas.
+- O primeiro IATA encontrado aciona o globo, o card de destino e os painéis laterais.
+- Portanto o Redator Final deve sempre iniciar o relatório com `Destino recomendado: Cidade (IATA).`
+- Usar títulos markdown `####` melhora a renderização no balão do chat.
+- Os painéis laterais usam fallback mockado/derivado do IATA, mas agora também aceitam um payload oculto `TRAVELIA_DATA` para preencher dados reais vindos do n8n.
+
+Formato recomendado para a resposta final:
+
+```text
+#### Relatório Executivo
+Destino recomendado: Lisboa (LIS).
+
+#### Destino Recomendado
+...
+
+#### Análise Cambial
+...
+
+#### Passagens Aéreas
+...
+
+#### Contexto Econômico
+...
+
+#### Recomendação Final
+...
+```
+
+Payload oculto recomendado ao final da resposta:
+
+```html
+<!-- TRAVELIA_DATA_START
+{
+  "recommended_iata": "LIS",
+  "city": "Lisboa",
+  "flights": [
+    {
+      "companhia_aerea": "TAP",
+      "preco_individual": 4100,
+      "preco_casal": 8200,
+      "aviso_bagagem": "Valores não incluem bagagem despachada",
+      "aviso_variacao": "Preços e disponibilidade podem mudar rapidamente"
+    }
+  ],
+  "exchange": {
+    "fiat": [
+      { "moeda": "EUR", "variacao_percentual": -0.8 },
+      { "moeda": "USD", "variacao_percentual": 1.4 }
+    ],
+    "cripto": [
+      { "ativo": "BTC", "variacao_percentual": -3.2 }
+    ]
+  },
+  "news": [
+    { "titulo": "...", "fonte": "...", "data": "...", "link": "..." }
+  ],
+  "budget": {
+    "total_brl": null,
+    "breakdown": []
+  }
+}
+TRAVELIA_DATA_END -->
+```
+
+O bloco acima não deve aparecer visualmente no chat. Ele é lido pelo frontend para atualizar cards reais quando houver dados confiáveis.

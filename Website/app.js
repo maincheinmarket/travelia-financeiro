@@ -145,9 +145,11 @@ function updateThemeToggleIcons(theme) {
 function initSettings() {
     let url = localStorage.getItem('travelia_n8n_url') || '';
     let mode = localStorage.getItem('travelia_conn_mode') || 'demo';
+    let loadHistory = localStorage.getItem('travelia_load_history') === 'true';
 
     document.getElementById('n8n-webhook-url').value = url;
     document.getElementById('n8n-cors-mode').value = mode;
+    document.getElementById('n8n-load-history').checked = loadHistory;
 
     updateConnectionIndicator(mode, url ? 'configured' : 'not_configured');
 }
@@ -155,8 +157,47 @@ function initSettings() {
 function getSettings() {
     return {
         url: localStorage.getItem('travelia_n8n_url') || '',
-        mode: localStorage.getItem('travelia_conn_mode') || 'demo'
+        mode: localStorage.getItem('travelia_conn_mode') || 'demo',
+        loadHistory: localStorage.getItem('travelia_load_history') === 'true'
     };
+}
+
+function normalizeWebhookUrl(rawUrl) {
+    const value = rawUrl.trim();
+    if (!value) return '';
+
+    try {
+        const url = new URL(value);
+        url.searchParams.delete('action');
+        url.searchParams.delete('sessionId');
+        return url.toString();
+    } catch (e) {
+        return value;
+    }
+}
+
+function buildN8NUrl(baseUrl, params = {}) {
+    const url = new URL(baseUrl);
+    Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            url.searchParams.set(key, value);
+        }
+    });
+    return url.toString();
+}
+
+async function fetchWithTimeout(resource, options = {}, timeoutMs = 180000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        return await fetch(resource, {
+            ...options,
+            signal: controller.signal
+        });
+    } finally {
+        clearTimeout(timeoutId);
+    }
 }
 
 function openSettingsModal() {
@@ -168,11 +209,13 @@ function closeSettingsModal() {
 }
 
 function saveSettingsForm() {
-    const url = document.getElementById('n8n-webhook-url').value.trim();
+    const url = normalizeWebhookUrl(document.getElementById('n8n-webhook-url').value);
     const mode = document.getElementById('n8n-cors-mode').value;
+    const loadHistory = document.getElementById('n8n-load-history').checked;
 
     localStorage.setItem('travelia_n8n_url', url);
     localStorage.setItem('travelia_conn_mode', mode);
+    localStorage.setItem('travelia_load_history', String(loadHistory));
 
     closeSettingsModal();
     appendSystemMessage(`Configurações salvas: Modo ${mode.toUpperCase()} ativo.`);
@@ -212,7 +255,7 @@ function updateConnectionIndicator(mode, status) {
 }
 
 async function testN8NConnection() {
-    const url = document.getElementById('n8n-webhook-url').value.trim();
+    const url = normalizeWebhookUrl(document.getElementById('n8n-webhook-url').value);
     if (!url) {
         alert("Insira a URL do webhook para testar.");
         return;
@@ -221,13 +264,17 @@ async function testN8NConnection() {
     updateConnectionIndicator('direct', 'testing');
 
     try {
-        const res = await fetch(`${url}?action=loadPreviousSession&sessionId=test_session`, {
+        const res = await fetchWithTimeout(buildN8NUrl(url, {
+            action: 'loadPreviousSession',
+            sessionId: 'travelia_connection_test'
+        }), {
             method: 'GET'
-        });
+        }, 15000);
         
         if (res.ok || res.status === 405 || res.status === 400 || res.status === 401) {
             // Some webhook endpoints response 405 on GET but are alive
             updateConnectionIndicator('direct', 'connected');
+            document.getElementById('n8n-webhook-url').value = url;
             alert("Sucesso! Conexão detectada com o webhook do n8n.");
         } else {
             throw new Error(`Código de status: ${res.status}`);
@@ -235,7 +282,10 @@ async function testN8NConnection() {
     } catch (e) {
         console.error(e);
         updateConnectionIndicator('direct', 'failed');
-        alert(`Erro de conexão: ${e.message}. Verifique a URL e garanta que o CORS esteja ativo no n8n.`);
+        const message = e.name === 'AbortError'
+            ? 'Tempo limite excedido ao testar o webhook.'
+            : e.message;
+        alert(`Erro de conexão: ${message}. Verifique a URL e garanta que o domínio do site esteja em Allowed Origins no n8n.`);
     }
 }
 
@@ -345,7 +395,28 @@ function resetDataCards() {
    DYNAMIC POPULATORS FOR DATA CARDS (triggered from parsed chat keywords)
    ========================================================================== */
 
-function populateExchange(iata) {
+function normalizePercent(value) {
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value === 'number') return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
+    const str = String(value).trim();
+    return str.includes('%') ? str : `${str}%`;
+}
+
+function findCurrencyChange(exchangeData, code) {
+    if (!exchangeData) return null;
+    const list = Array.isArray(exchangeData) ? exchangeData : [
+        ...(exchangeData.fiat || []),
+        ...(exchangeData.cripto || []),
+        ...(exchangeData.currencies || [])
+    ];
+    const item = list.find(entry => {
+        const entryCode = entry.moeda || entry.ativo || entry.code || entry.currency;
+        return String(entryCode || '').toUpperCase() === code;
+    });
+    return normalizePercent(item?.variacao_percentual ?? item?.change ?? item?.change_percent);
+}
+
+function populateExchange(iata, exchangeData = null) {
     let rateUsd = '+1.4%';
     let rateEur = '-0.8%';
     let rateLocal = '+0.5%';
@@ -363,12 +434,18 @@ function populateExchange(iata) {
         rateLocal = '-14.3%';
     }
 
+    const localCode = localName.split(' / ')[0];
+    rateUsd = findCurrencyChange(exchangeData, 'USD') || rateUsd;
+    rateEur = findCurrencyChange(exchangeData, 'EUR') || rateEur;
+    rateLocal = findCurrencyChange(exchangeData, localCode) || rateLocal;
+    rateBtc = findCurrencyChange(exchangeData, 'BTC') || rateBtc;
+
     document.getElementById('currency-dest-name').textContent = localName;
 
     const usdEl = document.querySelector('#currency-usd .trend-pct');
     usdEl.textContent = rateUsd;
-    usdEl.className = 'trend-pct font-success';
-    drawSparkline('sparkline-usd', true);
+    usdEl.className = rateUsd.includes('-') ? 'trend-pct font-error' : 'trend-pct font-success';
+    drawSparkline('sparkline-usd', !rateUsd.includes('-'));
 
     const eurEl = document.querySelector('#currency-eur .trend-pct');
     eurEl.textContent = rateEur;
@@ -382,11 +459,23 @@ function populateExchange(iata) {
 
     const btcEl = document.querySelector('#currency-btc .trend-pct');
     btcEl.textContent = rateBtc;
-    btcEl.className = 'trend-pct font-error';
-    drawSparkline('sparkline-btc', false);
+    btcEl.className = rateBtc.includes('-') ? 'trend-pct font-error' : 'trend-pct font-success';
+    drawSparkline('sparkline-btc', !rateBtc.includes('-'));
 }
 
-function populateFlights(cityName, iata) {
+function normalizeFlightOption(flight) {
+    const indiv = Number(flight.preco_individual ?? flight.indiv ?? flight.price ?? flight.price_individual);
+    const casal = Number(flight.preco_casal ?? flight.casal ?? (Number.isFinite(indiv) ? indiv * 2 : NaN));
+    return {
+        airline: flight.companhia_aerea || flight.airline || flight.companhia || 'Companhia não informada',
+        indiv: Number.isFinite(indiv) ? indiv : null,
+        casal: Number.isFinite(casal) ? casal : null,
+        bag: flight.aviso_bagagem || flight.bag || 'Valores não incluem bagagem despachada',
+        warning: flight.aviso_variacao || flight.warning || 'Preços e disponibilidade podem mudar rapidamente'
+    };
+}
+
+function populateFlights(cityName, iata, flightData = null) {
     const container = document.getElementById('flights-container');
     container.innerHTML = '';
 
@@ -417,11 +506,16 @@ function populateFlights(cityName, iata) {
         ]
     };
 
-    const flights = flightOptions[iata] || flightOptions['default'];
+    const liveFlights = Array.isArray(flightData) ? flightData : flightData?.voos;
+    const flights = liveFlights?.length
+        ? liveFlights.map(normalizeFlightOption)
+        : (flightOptions[iata] || flightOptions['default']);
 
     flights.forEach((f, idx) => {
         const item = document.createElement('div');
         item.className = `flight-item ${idx === 0 ? 'cheapest' : ''}`;
+        const indiv = f.indiv !== null ? `R$ ${f.indiv.toLocaleString('pt-BR')}` : '--';
+        const casal = f.casal !== null ? `R$ ${f.casal.toLocaleString('pt-BR')}` : '--';
         item.innerHTML = `
             <div class="flight-top">
                 <span class="airline-info"><i data-lucide="plane"></i> ${f.airline}</span>
@@ -430,11 +524,11 @@ function populateFlights(cityName, iata) {
             <div class="flight-prices">
                 <div class="price-box">
                     <span class="lbl">Individual</span>
-                    <span class="val">R$ ${f.indiv.toLocaleString('pt-BR')}</span>
+                    <span class="val">${indiv}</span>
                 </div>
                 <div class="price-box">
                     <span class="lbl">Casal (x2)</span>
-                    <span class="val">R$ ${f.casal.toLocaleString('pt-BR')}</span>
+                    <span class="val">${casal}</span>
                 </div>
             </div>
         `;
@@ -443,11 +537,17 @@ function populateFlights(cityName, iata) {
     lucide.createIcons();
 }
 
-function populateNews(cityName) {
+function populateNews(cityName, newsData = null) {
     const container = document.getElementById('news-container');
     container.innerHTML = '';
 
-    const headlines = [
+    const liveNews = Array.isArray(newsData) ? newsData : newsData?.noticias;
+    const headlines = liveNews?.length ? liveNews.map(news => ({
+        title: news.titulo || news.title || 'Notícia sem título',
+        source: news.fonte || news.source || 'Fonte não informada',
+        date: news.data || news.date || news.iso_date || '',
+        link: news.link || '#'
+    })) : [
         { title: `Taxa de juros e inflação pressionam turismo em ${cityName}`, source: 'Valor Econômico', date: 'Hoje' },
         { title: `Mercado financeiro local ajusta projeções cambiais para o próximo trimestre`, source: 'Bloomberg Linea', date: 'Ontem' },
         { title: `Demanda por viagens de luxo para ${cityName} sobe 15% apesar do câmbio`, source: 'Forbes Brasil', date: 'Há 3 dias' }
@@ -456,8 +556,10 @@ function populateNews(cityName) {
     headlines.forEach(news => {
         const item = document.createElement('div');
         item.className = 'news-item';
+        const href = news.link && news.link !== '#' ? news.link : '#';
+        const target = href === '#' ? '' : ' target="_blank" rel="noopener noreferrer"';
         item.innerHTML = `
-            <a href="#" onclick="return false;">
+            <a href="${href}"${target} ${href === '#' ? 'onclick="return false;"' : ''}>
                 <h5>${news.title}</h5>
                 <div class="news-meta">
                     <span>${news.source}</span>
@@ -469,7 +571,7 @@ function populateNews(cityName) {
     });
 }
 
-function populateBudget(cityName) {
+function populateBudget(cityName, budgetData = null) {
     // Standard luxury values
     let totalBRL = 24800;
     let breakdown = [
@@ -493,6 +595,20 @@ function populateBudget(cityName) {
         breakdown[0].percentage = 25;
         breakdown[1].value = 45;
         breakdown[1].percentage = 45;
+    }
+
+    if (budgetData) {
+        const liveTotal = Number(budgetData.total_brl ?? budgetData.totalBRL ?? budgetData.total);
+        if (Number.isFinite(liveTotal)) totalBRL = liveTotal;
+
+        const liveBreakdown = budgetData.breakdown || budgetData.itens;
+        if (Array.isArray(liveBreakdown) && liveBreakdown.length) {
+            breakdown = liveBreakdown.map(item => ({
+                name: item.name || item.nome || item.categoria || 'Categoria',
+                value: Number(item.value ?? item.valor ?? item.percentage ?? item.percentual ?? 0),
+                percentage: Number(item.percentage ?? item.percentual ?? item.value ?? item.valor ?? 0)
+            }));
+        }
     }
 
     document.getElementById('budget-total-val').textContent = `R$ ${totalBRL.toLocaleString('pt-BR')}`;
@@ -576,13 +692,8 @@ function appendBotWelcomeMessage() {
     msg.className = 'message bot-message';
     msg.innerHTML = `
         <p>Olá! Sou o seu <strong>Concierge de Viagens e Consultor Financeiro</strong>.</p>
-        <p>Para planejarmos a melhor experiência personalizada para você saindo de <strong>Florianópolis (FLN)</strong>, por favor me informe:</p>
-        <ol>
-            <li>Qual o seu destino de interesse (ex: Europa, Paris, Tóquio, Argentina)?</li>
-            <li>Quando gostaria de viajar (ida e volta)?</li>
-            <li>Qual a sua moeda de preferência (ex: Euro, Dólar, BRL)?</li>
-        </ol>
-        <p><em>Posso inferir a melhor época e opções se você me disser apenas o continente ou tipo de clima desejado!</em></p>
+        <p>Diga apenas uma intenção de viagem saindo de <strong>Florianópolis (FLN)</strong>, como <strong>Europa mês que vem</strong>, <strong>praia barata</strong> ou <strong>Paris em outubro</strong>.</p>
+        <p>Eu infiro idioma, moeda local, datas viáveis quando possível e comparo destinos por menor preço antes de recomendar.</p>
     `;
     container.appendChild(msg);
     container.scrollTop = container.scrollHeight;

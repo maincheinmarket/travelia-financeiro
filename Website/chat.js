@@ -3,6 +3,7 @@
    ========================================================================== */
 
 let sessionId = '';
+let isSendingMessage = false;
 const iataCoordinates = {
     // Europa
     'CDG': [2.5500, 49.0097], // Paris CDG
@@ -158,6 +159,11 @@ function createBotTypingBubble() {
 
 // Main Send Message Function
 async function sendMessage(text) {
+    if (isSendingMessage) {
+        appendSystemMessage('Aguarde a resposta atual do Concierge antes de enviar outra mensagem.');
+        return;
+    }
+
     appendUserMessage(text);
 
     const config = getSettings();
@@ -171,12 +177,15 @@ async function sendMessage(text) {
         return;
     }
 
+    isSendingMessage = true;
+    setSendButtonLoading(true);
+
     const bubbleInfo = createBotTypingBubble();
     const botBubble = bubbleInfo.messageBubble;
     const typingIndicator = bubbleInfo.indicator;
 
     try {
-        const response = await fetch(`${config.url}?action=sendMessage`, {
+        const response = await fetchWithTimeout(buildN8NUrl(config.url, { action: 'sendMessage' }), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -186,10 +195,11 @@ async function sendMessage(text) {
                 sessionId: sessionId,
                 chatInput: text
             })
-        });
+        }, 180000);
 
         if (!response.ok) {
-            throw new Error(`n8n HTTP Error: ${response.status}`);
+            const errorText = await response.text().catch(() => '');
+            throw new Error(`n8n HTTP ${response.status}${errorText ? `: ${errorText.slice(0, 160)}` : ''}`);
         }
 
         typingIndicator.remove();
@@ -197,7 +207,7 @@ async function sendMessage(text) {
         const contentType = response.headers.get('content-type') || '';
         
         // Handle SSE / Streaming responses
-        if (contentType.includes('text/event-stream') || response.body) {
+        if (contentType.includes('text/event-stream')) {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let accumulatedText = '';
@@ -211,18 +221,20 @@ async function sendMessage(text) {
                 
                 accumulatedText += parsedTokens;
                 
-                // Parse markdown in real-time
-                botBubble.innerHTML = typeof marked.parse === 'function' ? marked.parse(accumulatedText) : accumulatedText;
+                // Parse markdown in real-time. Internal integration payloads stay hidden.
+                const displayText = stripTraveliaData(accumulatedText);
+                botBubble.innerHTML = typeof marked.parse === 'function' ? marked.parse(displayText) : displayText;
                 document.getElementById('chat-messages-container').scrollTop = document.getElementById('chat-messages-container').scrollHeight;
             }
             
             // Post-stream finished: run parsers
             parseAndApplyDetails(accumulatedText);
         } else {
-            // Standard JSON response
-            const data = await response.json();
-            const responseText = data.text || data.output || (typeof data === 'string' ? data : JSON.stringify(data));
-            botBubble.innerHTML = typeof marked.parse === 'function' ? marked.parse(responseText) : responseText;
+            // Standard JSON/text response
+            const raw = await response.text();
+            const responseText = extractResponseText(raw);
+            const displayText = stripTraveliaData(responseText);
+            botBubble.innerHTML = typeof marked.parse === 'function' ? marked.parse(displayText) : displayText;
             document.getElementById('chat-messages-container').scrollTop = document.getElementById('chat-messages-container').scrollHeight;
             parseAndApplyDetails(responseText);
         }
@@ -230,11 +242,58 @@ async function sendMessage(text) {
     } catch (err) {
         console.error("Erro na requisição n8n:", err);
         typingIndicator.remove();
-        botBubble.innerHTML = `<span class="font-error">Falha ao se comunicar com o n8n: ${err.message}. Entrando em Modo Demo temporariamente para testes.</span>`;
-        // Fallback to demo response in case of network error for better experience
-        setTimeout(() => {
-            simulateDemoResponse(text);
-        }, 1500);
+        const message = err.name === 'AbortError'
+            ? 'A resposta do n8n excedeu o tempo limite. Verifique execuções pendentes, rate limits e tempo das APIs externas.'
+            : err.message;
+        botBubble.innerHTML = `<span class="font-error">Falha ao se comunicar com o n8n: ${message}</span>`;
+    } finally {
+        isSendingMessage = false;
+        setSendButtonLoading(false);
+    }
+}
+
+function setSendButtonLoading(isLoading) {
+    const button = document.getElementById('btn-send-chat');
+    const input = document.getElementById('chat-input');
+    if (!button || !input) return;
+
+    button.disabled = isLoading;
+    input.disabled = isLoading;
+    button.innerHTML = isLoading ? '<i data-lucide="loader-2"></i>' : '<i data-lucide="send"></i>';
+    lucide.createIcons();
+}
+
+function stripTraveliaData(text) {
+    return text.replace(/<!--\s*TRAVELIA_DATA_START[\s\S]*?TRAVELIA_DATA_END\s*-->/g, '').trim();
+}
+
+function extractResponseText(raw) {
+    if (!raw) return '';
+
+    try {
+        const data = JSON.parse(raw);
+        if (typeof data === 'string') return data;
+        return data.text ||
+            data.output ||
+            data.message ||
+            data.response ||
+            data.data?.text ||
+            data.data?.output ||
+            JSON.stringify(data);
+    } catch (e) {
+        return raw;
+    }
+}
+
+function extractTraveliaData(text) {
+    const markerMatch = text.match(/<!--\s*TRAVELIA_DATA_START\s*([\s\S]*?)\s*TRAVELIA_DATA_END\s*-->/);
+    if (!markerMatch) return null;
+
+    try {
+        return JSON.parse(markerMatch[1]);
+    } catch (e) {
+        console.warn('Payload TRAVELIA_DATA inválido.', e);
+        return null;
     }
 }
 
@@ -252,7 +311,15 @@ function parseSSEChunk(chunk) {
             try {
                 const jsonObj = JSON.parse(dataStr);
                 // Extract whatever output is sent by n8n (text, data, token)
-                result += jsonObj.text || jsonObj.message || jsonObj.token || jsonObj.chunk || '';
+                result += jsonObj.text ||
+                    jsonObj.output ||
+                    jsonObj.message ||
+                    jsonObj.token ||
+                    jsonObj.chunk ||
+                    jsonObj.content ||
+                    jsonObj.data?.text ||
+                    jsonObj.data?.output ||
+                    '';
             } catch (e) {
                 // If it's not valid JSON, treat it as raw text
                 result += dataStr;
@@ -264,23 +331,33 @@ function parseSSEChunk(chunk) {
 
 // Scan agent text for details
 function parseAndApplyDetails(text) {
+    const traveliaData = extractTraveliaData(text);
+    const textForParsing = stripTraveliaData(text);
+
     // 1. Look for IATA Codes (3 uppercase letters bounded by boundaries)
     const iataRegex = /\b([A-Z]{3})\b/g;
     let match;
     let foundIatas = [];
     
-    while ((match = iataRegex.exec(text)) !== null) {
+    while ((match = iataRegex.exec(textForParsing)) !== null) {
         const code = match[1];
         if (iataCoordinates[code] && code !== 'FLN') {
             foundIatas.push(code);
         }
     }
 
-    if (foundIatas.length > 0) {
+    const recommendedIata = traveliaData?.recommended_iata || traveliaData?.destino_iata;
+    if (recommendedIata && iataCoordinates[recommendedIata] && recommendedIata !== 'FLN') {
+        foundIatas.unshift(recommendedIata);
+    }
+
+    const uniqueIatas = [...new Set(foundIatas)];
+
+    if (uniqueIatas.length > 0) {
         // Target the first unique destination IATA
-        const targetIata = foundIatas[0];
+        const targetIata = uniqueIatas[0];
         const coords = iataCoordinates[targetIata];
-        const cityName = cityNames[targetIata] || "Destino";
+        const cityName = traveliaData?.city || traveliaData?.cidade || cityNames[targetIata] || "Destino";
         
         // Trigger Globe flyTo and route animation
         animateFlightRoute(coords, cityName, targetIata);
@@ -289,16 +366,16 @@ function parseAndApplyDetails(text) {
         updateDestinationPanel(cityName, targetIata);
         
         // Update flight details card
-        populateFlights(cityName, targetIata);
+        populateFlights(cityName, targetIata, traveliaData?.flights || traveliaData?.voos);
 
         // Update exchange rate details
-        populateExchange(targetIata);
+        populateExchange(targetIata, traveliaData?.exchange || traveliaData?.cambio);
         
         // Populate news card
-        populateNews(cityName);
+        populateNews(cityName, traveliaData?.news || traveliaData?.noticias);
 
         // Populate budget
-        populateBudget(cityName);
+        populateBudget(cityName, traveliaData?.budget || traveliaData?.orcamento);
     }
 }
 
@@ -359,10 +436,13 @@ function simulateSpeechRecognition() {
 // Load previous history (best effort mockup)
 async function loadHistory() {
     const config = getSettings();
-    if (config.mode === 'demo' || !config.url) return;
+    if (config.mode === 'demo' || !config.url || !config.loadHistory) return;
 
     try {
-        const response = await fetch(`${config.url}?action=loadPreviousSession&sessionId=${sessionId}`);
+        const response = await fetchWithTimeout(buildN8NUrl(config.url, {
+            action: 'loadPreviousSession',
+            sessionId
+        }), {}, 15000);
         if (response.ok) {
             const data = await response.json();
             // n8n returns messages array if memory contains data

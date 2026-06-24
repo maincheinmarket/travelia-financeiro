@@ -14,6 +14,27 @@ O frontend se integra com o n8n através de chamadas HTTP ao nó **Chat Trigger*
   └────────(SSE Stream / JSON Response)────────────┘
 ```
 
+### Configuração recomendada no Chat Trigger
+
+Para o Travelia, o Chat Trigger deve ficar como endpoint público embedded, com CORS restrito ao domínio do site:
+
+```text
+public=true
+mode=webhook
+authentication=none
+responseMode=streaming
+allowedOrigins=https://travelia-financeiro.vercel.app,http://localhost:3000,http://localhost:5173,http://127.0.0.1:5500
+loadPreviousSession=notSupported
+allowFileUploads=false
+```
+
+Justificativas:
+
+*   `streaming` melhora a percepção de velocidade em respostas longas do agente.
+*   `allowedOrigins` não deve ficar como `*` em produção.
+*   `loadPreviousSession` fica desligado por padrão para evitar execuções em carregamento de página. A memória do agente continua funcionando por `sessionId`.
+*   Se o histórico visual for ativado no futuro, conecte o Chat Trigger e o Agent à mesma memória, conforme recomendação do n8n.
+
 ### Endpoints e Ações
 O frontend envia requisições utilizando os seguintes parâmetros e estruturas:
 
@@ -33,6 +54,15 @@ Enviado quando o usuário digita uma mensagem no chat ou clica em um chip de sug
 *   **Formato de Resposta Esperado:** 
     - **Streaming (SSE):** O n8n deve retornar chunks de dados (`text/event-stream`). Cada evento contendo tokens de texto parciais formatados como JSON: `data: {"text": "token"}`.
     - **Não-Streaming (JSON):** Se o stream falhar, o frontend aceita um JSON completo contendo a resposta textual no campo `text` ou `output`.
+
+### Boas práticas aplicadas no frontend
+
+*   A URL do webhook é normalizada antes de salvar; `action` e `sessionId` antigos são removidos.
+*   O site monta a URL com `URLSearchParams`, evitando concatenação frágil com `?` e `&`.
+*   O envio usa `AbortController` com timeout de 180s.
+*   O botão de envio e o input ficam bloqueados enquanto uma execução está em andamento.
+*   Em erro real do n8n, o site mostra o erro ao usuário e não cai automaticamente em modo demo.
+*   O carregamento de histórico é opcional e desligado por padrão.
 
 #### B. Carregar Histórico (`loadPreviousSession`)
 Chamado no carregamento da página para restaurar o histórico caso o usuário já possua um `sessionId` ativo.
@@ -90,6 +120,48 @@ Para maximizar a experiência visual do site e garantir que o parsing ocorra per
 3.  **Uso de Markdown Estruturado:**
     Utilize títulos markdown (`####`) para criar seções bem demarcadas que serão renderizadas com cores e bordas premium no balão de chat do frontend.
     *   Use títulos como: `#### Relatório Executivo`, `#### Análise Cambial`, `#### Passagens Aéreas`, `#### Recomendação Final`.
+
+4.  **Payload opcional para cards reais (`TRAVELIA_DATA`):**
+    Além do texto em markdown, o Redator Final pode anexar ao final da resposta um comentário HTML invisível com JSON válido. O chat não exibe esse bloco, mas o frontend usa seus dados para preencher os cards laterais com valores reais retornados pelo n8n.
+
+    ```html
+    <!-- TRAVELIA_DATA_START
+    {
+      "recommended_iata": "LIS",
+      "city": "Lisboa",
+      "flights": [
+        {
+          "companhia_aerea": "TAP",
+          "preco_individual": 4100,
+          "preco_casal": 8200,
+          "aviso_bagagem": "Valores não incluem bagagem despachada",
+          "aviso_variacao": "Preços e disponibilidade podem mudar rapidamente"
+        }
+      ],
+      "exchange": {
+        "fiat": [
+          { "moeda": "EUR", "variacao_percentual": -0.8 },
+          { "moeda": "USD", "variacao_percentual": 1.4 }
+        ],
+        "cripto": [
+          { "ativo": "BTC", "variacao_percentual": -3.2 }
+        ]
+      },
+      "news": [
+        { "titulo": "...", "fonte": "...", "data": "...", "link": "..." }
+      ],
+      "budget": {
+        "total_brl": null,
+        "breakdown": []
+      }
+    }
+    TRAVELIA_DATA_END -->
+    ```
+
+    Regras:
+    *   Use `null` quando não houver dado confiável.
+    *   Não invente preço, câmbio, notícia ou orçamento.
+    *   Mantenha o destino recomendado no campo `recommended_iata`, pois ele tem prioridade sobre outros IATAs encontrados no texto.
 
 ---
 
