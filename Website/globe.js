@@ -126,6 +126,9 @@ function animateFlightRoute(destCoords, destName, iataCode) {
 
     if (!map) return;
 
+    // Check prefers-reduced-motion accessibility preference
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
     // Hide reference markers during active route animation
     referenceMarkers.forEach(marker => marker.remove());
 
@@ -202,51 +205,66 @@ function animateFlightRoute(destCoords, destName, iataCode) {
     bounds.extend(originCoords);
     bounds.extend(destCoords);
     
-    // Fit bounds smoothly
+    // Fit bounds smoothly or instantly if reduced motion is requested
     map.fitBounds(bounds, {
         padding: 100,
         maxZoom: 5,
-        duration: 2000,
+        duration: prefersReducedMotion ? 0 : 2000,
         pitch: 45
     });
 
     // Stop rotation when animating a route
     if (isRotating) stopGlobeRotation();
 
-    // 4. Animate the line drawing over time
-    let progress = 0;
-    const animationSpeed = 2; // Steps per frame
-
-    function drawLine() {
-        if (progress >= fullCoordinates.length) {
-            // Animation finished: Add destination marker and popup
-            addDestinationMarker(destCoords, destName, iataCode);
-            return;
-        }
-
-        progress = Math.min(progress + animationSpeed, fullCoordinates.length);
-        
-        const animatedCoords = fullCoordinates.slice(0, progress);
-        
+    // 4. Animate the line drawing over time (or instantly if reduced motion is preferred)
+    if (prefersReducedMotion) {
         const geojson = {
             'type': 'Feature',
             'properties': {},
             'geometry': {
                 'type': 'LineString',
-                'coordinates': animatedCoords
+                'coordinates': fullCoordinates
             }
         };
-
         if (map.getSource('route')) {
             map.getSource('route').setData(geojson);
-            animationFrameId = requestAnimationFrame(drawLine);
         }
-    }
+        addDestinationMarker(destCoords, destName, iataCode);
+    } else {
+        let progress = 0;
+        const animationSpeed = 2; // Steps per frame
 
-    // Start drawing animation after a slight delay for camera alignment
-    setTimeout(() => {
-        drawLine();
-    }, 1500);
+        function drawLine() {
+            if (progress >= fullCoordinates.length) {
+                // Animation finished: Add destination marker and popup
+                addDestinationMarker(destCoords, destName, iataCode);
+                return;
+            }
+
+            progress = Math.min(progress + animationSpeed, fullCoordinates.length);
+            
+            const animatedCoords = fullCoordinates.slice(0, progress);
+            
+            const geojson = {
+                'type': 'Feature',
+                'properties': {},
+                'geometry': {
+                    'type': 'LineString',
+                    'coordinates': animatedCoords
+                }
+            };
+
+            if (map.getSource('route')) {
+                map.getSource('route').setData(geojson);
+                animationFrameId = requestAnimationFrame(drawLine);
+            }
+        }
+
+        // Start drawing animation after a slight delay for camera alignment
+        setTimeout(() => {
+            drawLine();
+        }, 1500);
+    }
 }
 
 // Add Destination Marker
@@ -268,12 +286,13 @@ function addDestinationMarker(coords, name, iata) {
     marker.togglePopup();
     activeMarkers.push(marker);
 
-    // Zoom into destination slightly
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Zoom into destination slightly or instantly if reduced motion is requested
     map.flyTo({
         center: coords,
         zoom: 4.5,
         pitch: 50,
-        duration: 2000
+        duration: prefersReducedMotion ? 0 : 2000
     });
 }
 
@@ -324,6 +343,13 @@ function toggleGlobeRotation() {
 
 function startGlobeRotation() {
     if (isRotating) return;
+    
+    // Do not initiate auto-rotation if the user prefers reduced motion
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        console.log("Auto-rotation prevented due to prefers-reduced-motion preference.");
+        return;
+    }
+    
     isRotating = true;
 
     const rotationSpeed = 0.5; // degrees per frame
